@@ -42,10 +42,79 @@ This application provides a comprehensive solution for load testing Amazon Dynam
 
 ## 🏗️ Architecture
 
+### High-Level Architecture
+
+```mermaid
+graph TB
+    subgraph "Development Environment"
+        Dev[👨‍💻 Developer]
+        LocalStack[🐳 LocalStack<br/>DynamoDB + SSM]
+        DevApp[📱 Load Test App<br/>Local Container]
+    end
+
+    subgraph "AWS Cloud Environment"
+        subgraph "🏗️ Infrastructure"
+            CF[☁️ CloudFormation<br/>Stack]
+            SSM[🔧 SSM Parameter<br/>Store]
+            CW[📊 CloudWatch<br/>Dashboard & Logs]
+            ECR[📦 Elastic Container<br/>Registry]
+        end
+
+        subgraph "🌐 VPC Network"
+            subgraph "Private Subnet"
+                ECS[🚀 ECS Fargate<br/>Task]
+            end
+            subgraph "Public Subnet"
+                NAT[🌐 NAT Gateway]
+            end
+            IGW[🌍 Internet Gateway]
+        end
+
+        subgraph "💾 Data & Storage"
+            DDB[⚡ DynamoDB<br/>Table]
+        end
+    end
+
+    subgraph "🔄 CI/CD Pipeline"
+        Build[🔨 Build Script<br/>build.sh]
+        Deploy[🚀 Deploy Script<br/>deploy-stack.sh]
+        Run[▶️ Run Script<br/>run.sh]
+    end
+
+    %% Development Flow
+    Dev --> Build
+    Build --> DevApp
+    DevApp --> LocalStack
+    
+    %% AWS Deployment Flow
+    Build --> ECR
+    Deploy --> CF
+    CF --> SSM
+    CF --> CW
+    CF --> ECS
+    Run --> ECS
+    
+    %% Runtime Connections
+    ECS --> SSM
+    ECS --> DDB
+    ECS --> CW
+    ECS --> NAT
+    NAT --> IGW
+    
+    %% Styling
+    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#fff
+    classDef dev fill:#4CAF50,stroke:#2E7D32,stroke-width:2px,color:#fff
+    classDef script fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
+    
+    class CF,SSM,CW,ECR,ECS,DDB,NAT,IGW aws
+    class Dev,LocalStack,DevApp dev
+    class Build,Deploy,Run script
+```
+
 ### Application Architecture
 
 - **Java 21** with Virtual Threads for high-concurrency operations
-- **Spring Boot 3.2** for application framework and dependency injection
+- **Spring Boot 3.5.5** for application framework and dependency injection
 - **AWS SDK v2** for DynamoDB operations with async client
 - **CloudWatch** integration for metrics and monitoring
 - **Docker** containerization for consistent deployments
@@ -330,10 +399,9 @@ The project now includes **4 simplified scripts** that handle all automation nee
 | **`./scripts/setup-localstack.sh`** | Setup LocalStack DynamoDB & SSM      | ✅    | ❌  |
 | **`./scripts/setup-stack.sh`**      | Setup S3 bucket for templates        | ❌    | ✅  |
 | **`./scripts/build.sh`**            | Test, build, and deliver application | ✅    | ✅  |
-| **`./scripts/deploy-stack.sh`**     | Deploy/update infrastructure stack   | ❌    | ✅  |
+| **`./scripts/deploy-stack.sh`**     | Deploy/update infrastructure stack   | ✅    | ✅  |
 | **`./scripts/run.sh`**              | Run application (Docker Compose/ECS) | ✅    | ✅  |
 | **`./scripts/destroy-stack.sh`**    | Destroy infrastructure stack         | ✅    | ✅  |
-| **`./scripts/test-cleanup.sh`**     | Verify cleanup functionality         | ✅    | ❌  |
 
 ### Usage Examples
 
@@ -415,19 +483,6 @@ The project now includes **4 simplified scripts** that handle all automation nee
 
 # Destroy without confirmation prompts
 ./scripts/destroy-stack.sh aws --force
-```
-
-#### Test Cleanup Script
-
-```bash
-# Verify cleanup functionality with automated test
-./scripts/test-cleanup.sh
-
-# This script:
-# - Runs a load test with current configuration
-# - Verifies all test items are cleaned up properly
-# - Reports success/failure with detailed diagnostics
-# - Useful for CI/CD and regression testing
 ```
 
 ### Script Features
