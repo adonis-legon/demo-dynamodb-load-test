@@ -550,30 +550,32 @@ The application supports different load testing patterns:
 
 ## 📊 Monitoring
 
-### CloudWatch Metrics
+### CloudWatch Logs
 
-The application publishes custom metrics to CloudWatch:
+Application logs are automatically captured and sent to CloudWatch:
 
-- **ItemsWritten**: Total items successfully written
-- **WriteLatency**: Average write operation latency
-- **ErrorRate**: Percentage of failed operations
-- **ConcurrentOperations**: Current number of concurrent operations
-
-### Logs
-
-Application logs are available in:
-
-- **Local**: Docker container logs
+- **Local**: Docker container logs (`docker logs dynamodb-load-test-app`)
 - **AWS**: CloudWatch Logs (`/aws/ecs/dynamodb-load-test`)
 
-### Dashboard
+### CloudWatch Dashboard
 
 A CloudWatch dashboard is automatically created with:
 
-- Real-time metrics visualization
-- Error rate monitoring
-- Performance trends
-- Resource utilization
+- **DynamoDB Metrics**: Read/write capacity, throttling, system errors
+- **ECS Task Metrics**: CPU utilization, memory usage, task status
+- **Log-based Metrics**: Application errors, capacity errors, duplicate key errors (via metric filters)
+
+### Application Metrics
+
+The application collects detailed internal metrics:
+
+- **Response Times**: Average, percentiles (p50, p90, p95, p99)
+- **Success/Error Rates**: Operation success and failure statistics
+- **Error Categorization**: Capacity exceeded, duplicate keys, throttling, network errors
+- **Concurrency Tracking**: Metrics per concurrency level
+- **Throughput**: Operations per second
+
+These metrics are logged in structured JSON format and displayed in the final test report.
 
 ## 🔒 Security
 
