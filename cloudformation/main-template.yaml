@@ -1,0 +1,381 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "DynamoDB Load Test - Main Template for Complete Infrastructure Deployment"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [local, dev, staging, prod, aws]
+    Description: Environment name for resource naming and configuration
+
+  TableName:
+    Type: String
+    Default: load-test-table
+    Description: Name of the DynamoDB table for load testing
+
+  ConcurrencyLimit:
+    Type: Number
+    Default: 100
+    MinValue: 1
+    MaxValue: 1000
+    Description: Maximum concurrency limit for load testing
+
+  TotalItems:
+    Type: Number
+    Default: 10000
+    MinValue: 100
+    MaxValue: 1000000
+    Description: Total number of items to write during load test
+
+  MaxConcurrencyPercentage:
+    Type: Number
+    Default: 80.0
+    MinValue: 10.0
+    MaxValue: 100.0
+    Description: Percentage of items to write at maximum concurrency
+
+  DuplicatePercentage:
+    Type: Number
+    Default: 0.0
+    MinValue: 0.0
+    MaxValue: 100.0
+    Description: Percentage of items that should be duplicates (0.0 = no duplicates)
+
+  CleanupAfterTest:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Whether to cleanup test items after load test completion
+
+  ReadCapacityUnits:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 40000
+    Description: Read capacity units for DynamoDB table
+
+  WriteCapacityUnits:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 40000
+    Description: Write capacity units for DynamoDB table
+
+  BillingMode:
+    Type: String
+    Default: PAY_PER_REQUEST
+    AllowedValues: [PROVISIONED, PAY_PER_REQUEST]
+    Description: Billing mode for the DynamoDB table
+
+  PointInTimeRecoveryEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable point-in-time recovery for the DynamoDB table
+
+  DeletionProtectionEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable deletion protection for the DynamoDB table
+
+  SSMParameterPrefix:
+    Type: String
+    Default: "/dynamodb-load-test"
+    Description: SSM parameter prefix for application configuration
+
+  TemplateS3Bucket:
+    Type: String
+    Description: S3 bucket containing the nested CloudFormation templates
+
+  TemplateS3KeyPrefix:
+    Type: String
+    Default: "cloudformation/"
+    Description: S3 key prefix for the nested templates
+
+  # Infrastructure Parameters
+  VpcCidr:
+    Type: String
+    Default: "10.0.0.0/16"
+    Description: CIDR block for the VPC
+
+  PublicSubnetCidr:
+    Type: String
+    Default: "10.0.1.0/24"
+    Description: CIDR block for the public subnet
+
+  PrivateSubnetCidr:
+    Type: String
+    Default: "10.0.2.0/24"
+    Description: CIDR block for the private subnet
+
+  AvailabilityZone:
+    Type: String
+    Default: "us-east-1a"
+    Description: Availability Zone for the subnets
+
+  ECRRepositoryName:
+    Type: String
+    Default: "dynamodb-load-test"
+    Description: Name of the ECR repository for container images
+
+  LogRetentionDays:
+    Type: Number
+    Default: 7
+    Description: CloudWatch log retention in days
+
+  # ECS Parameters
+  TaskCpu:
+    Type: Number
+    Default: 256
+    Description: CPU units for ECS task (256 = 0.25 vCPU)
+
+  TaskMemory:
+    Type: Number
+    Default: 512
+    Description: Memory in MB for ECS task
+
+  ContainerImage:
+    Type: String
+    Default: ""
+    Description: ECR container image URI (will be set dynamically)
+
+  ContainerPort:
+    Type: Number
+    Default: 8080
+    Description: Container port for the application
+
+  DesiredCount:
+    Type: Number
+    Default: 0
+    Description: Desired number of running tasks (0 for on-demand)
+
+  MaxCapacity:
+    Type: Number
+    Default: 10
+    Description: Maximum number of tasks for auto scaling
+
+  MinCapacity:
+    Type: Number
+    Default: 0
+    Description: Minimum number of tasks for auto scaling
+
+Resources:
+  # Infrastructure Stack (VPC, networking, ECR, security groups)
+  InfrastructureStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3KeyPrefix}infrastructure-template.yaml"
+      Parameters:
+        Environment: !Ref Environment
+        VpcCidr: !Ref VpcCidr
+        PublicSubnetCidr: !Ref PublicSubnetCidr
+        PrivateSubnetCidr: !Ref PrivateSubnetCidr
+        AvailabilityZone: !Ref AvailabilityZone
+        ECRRepositoryName: !Ref ECRRepositoryName
+        LogRetentionDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: DynamoDBLoadTest
+        - Key: Component
+          Value: Infrastructure
+
+  # Data Infrastructure Stack (DynamoDB + SSM + IAM)
+  DataInfrastructureStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: InfrastructureStack
+    Properties:
+      TemplateURL: !Sub "https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3KeyPrefix}dynamodb-template.yaml"
+      Parameters:
+        Environment: !Ref Environment
+        TableName: !Ref TableName
+        BillingMode: !Ref BillingMode
+        ReadCapacityUnits: !Ref ReadCapacityUnits
+        WriteCapacityUnits: !Ref WriteCapacityUnits
+        PointInTimeRecoveryEnabled: !Ref PointInTimeRecoveryEnabled
+        DeletionProtectionEnabled: !Ref DeletionProtectionEnabled
+        SSMParameterPrefix: !Ref SSMParameterPrefix
+        ConcurrencyLimit: !Ref ConcurrencyLimit
+        TotalItems: !Ref TotalItems
+        MaxConcurrencyPercentage: !Ref MaxConcurrencyPercentage
+        DuplicatePercentage: !Ref DuplicatePercentage
+        CleanupAfterTest: !Ref CleanupAfterTest
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: DynamoDBLoadTest
+        - Key: Component
+          Value: DataInfrastructure
+
+  # ECS Stack (cluster, task definitions, IAM roles)
+  ECSStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - InfrastructureStack
+      - DataInfrastructureStack
+    Properties:
+      TemplateURL: !Sub "https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3KeyPrefix}ecs-template.yaml"
+      Parameters:
+        Environment: !Ref Environment
+        VpcId: !GetAtt InfrastructureStack.Outputs.VpcId
+        PrivateSubnetId: !GetAtt InfrastructureStack.Outputs.PrivateSubnetId
+        SecurityGroupId: !GetAtt InfrastructureStack.Outputs.ECSSecurityGroupId
+        ECRRepositoryURI: !GetAtt InfrastructureStack.Outputs.ECRRepositoryURI
+        TaskExecutionRoleArn: !GetAtt InfrastructureStack.Outputs.TaskExecutionRoleArn
+        TaskRoleArn: !GetAtt DataInfrastructureStack.Outputs.LoadTestExecutionRoleArn
+        LogGroupName: !GetAtt InfrastructureStack.Outputs.LogGroupName
+        TaskCpu: !Ref TaskCpu
+        TaskMemory: !Ref TaskMemory
+        ContainerImage: !Ref ContainerImage
+        ContainerPort: !Ref ContainerPort
+        DesiredCount: !Ref DesiredCount
+        MaxCapacity: !Ref MaxCapacity
+        MinCapacity: !Ref MinCapacity
+        TableName: !GetAtt DataInfrastructureStack.Outputs.LoadTestTableName
+        SSMParameterPrefix: !Ref SSMParameterPrefix
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: DynamoDBLoadTest
+        - Key: Component
+          Value: ECS
+
+  # Monitoring Stack
+  MonitoringStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - DataInfrastructureStack
+      - ECSStack
+    Properties:
+      TemplateURL: !Sub "https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3KeyPrefix}monitoring-template.yaml"
+      Parameters:
+        Environment: !Ref Environment
+        TableName: !GetAtt DataInfrastructureStack.Outputs.LoadTestTableName
+        ECSClusterName: !GetAtt ECSStack.Outputs.ECSClusterName
+        LogGroupName: !GetAtt InfrastructureStack.Outputs.LogGroupName
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: DynamoDBLoadTest
+        - Key: Component
+          Value: Monitoring
+
+Outputs:
+  # Infrastructure Outputs
+  VpcId:
+    Description: ID of the VPC created for the load test infrastructure
+    Value: !GetAtt InfrastructureStack.Outputs.VpcId
+    Export:
+      Name: !Sub "${Environment}-VpcId"
+
+  PublicSubnetId:
+    Description: ID of the public subnet
+    Value: !GetAtt InfrastructureStack.Outputs.PublicSubnetId
+    Export:
+      Name: !Sub "${Environment}-PublicSubnetId"
+
+  PrivateSubnetId:
+    Description: ID of the private subnet
+    Value: !GetAtt InfrastructureStack.Outputs.PrivateSubnetId
+    Export:
+      Name: !Sub "${Environment}-PrivateSubnetId"
+
+  ECRRepositoryURI:
+    Description: URI of the ECR repository for container images
+    Value: !GetAtt InfrastructureStack.Outputs.ECRRepositoryURI
+    Export:
+      Name: !Sub "${Environment}-ECRRepositoryURI"
+
+  ECSSecurityGroupId:
+    Description: ID of the security group for ECS tasks
+    Value: !GetAtt InfrastructureStack.Outputs.ECSSecurityGroupId
+    Export:
+      Name: !Sub "${Environment}-ECSSecurityGroupId"
+
+  # Data Infrastructure Outputs
+  LoadTestTableName:
+    Description: Name of the DynamoDB table created for load testing
+    Value: !GetAtt DataInfrastructureStack.Outputs.LoadTestTableName
+    Export:
+      Name: !Sub "${Environment}-LoadTestTableName"
+
+  LoadTestTableArn:
+    Description: ARN of the DynamoDB table created for load testing
+    Value: !GetAtt DataInfrastructureStack.Outputs.LoadTestTableArn
+    Export:
+      Name: !Sub "${Environment}-LoadTestTableArn"
+
+  LoadTestExecutionRoleArn:
+    Description: ARN of the IAM role for load test execution
+    Value: !GetAtt DataInfrastructureStack.Outputs.LoadTestExecutionRoleArn
+    Export:
+      Name: !Sub "${Environment}-LoadTestExecutionRoleArn"
+
+  SSMParameterPrefix:
+    Description: SSM parameter prefix for load test configuration
+    Value: !GetAtt DataInfrastructureStack.Outputs.SSMParameterPrefix
+    Export:
+      Name: !Sub "${Environment}-SSMParameterPrefix"
+
+  # ECS Outputs
+  ECSClusterName:
+    Description: Name of the ECS cluster
+    Value: !GetAtt ECSStack.Outputs.ECSClusterName
+    Export:
+      Name: !Sub "${Environment}-ECSClusterName"
+
+  ECSClusterArn:
+    Description: ARN of the ECS cluster
+    Value: !GetAtt ECSStack.Outputs.ECSClusterArn
+    Export:
+      Name: !Sub "${Environment}-ECSClusterArn"
+
+  TaskDefinitionArn:
+    Description: ARN of the ECS task definition
+    Value: !GetAtt ECSStack.Outputs.TaskDefinitionArn
+    Export:
+      Name: !Sub "${Environment}-TaskDefinitionArn"
+
+  # Monitoring Outputs
+  DashboardURL:
+    Description: URL of the CloudWatch Dashboard
+    Value: !GetAtt MonitoringStack.Outputs.DashboardURL
+    Export:
+      Name: !Sub "${Environment}-DashboardURL"
+
+  LoadTestLogGroupName:
+    Description: Name of the CloudWatch Log Group for load test application
+    Value: !GetAtt InfrastructureStack.Outputs.LogGroupName
+    Export:
+      Name: !Sub "${Environment}-LoadTestLogGroupName"
+
+  LoadTestLogGroupArn:
+    Description: ARN of the CloudWatch Log Group for load test application
+    Value: !GetAtt InfrastructureStack.Outputs.LogGroupArn
+    Export:
+      Name: !Sub "${Environment}-LoadTestLogGroupArn"
+
+  # Deployment Information
+  Environment:
+    Description: Environment name
+    Value: !Ref Environment
+    Export:
+      Name: !Sub "${Environment}-Environment"
+
+  DeploymentTimestamp:
+    Description: Timestamp of this deployment
+    Value: !Sub "${AWS::StackName}-${AWS::Region}-${AWS::AccountId}"
+    Export:
+      Name: !Sub "${Environment}-DeploymentInfo"
+
+  # Complete Infrastructure Summary
+  InfrastructureStatus:
+    Description: Summary of deployed infrastructure components
+    Value: !Sub "VPC: ${InfrastructureStack.Outputs.VpcId}, DynamoDB: ${DataInfrastructureStack.Outputs.LoadTestTableName}, ECS: ${ECSStack.Outputs.ECSClusterName}"
+    Export:
+      Name: !Sub "${Environment}-InfrastructureStatus"

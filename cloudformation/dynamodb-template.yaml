@@ -1,0 +1,305 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "DynamoDB Load Test - Comprehensive DynamoDB and IAM Template"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [local, dev, staging, prod, aws]
+    Description: Environment name for resource naming and configuration
+
+  TableName:
+    Type: String
+    Default: "dynamodb-load-test"
+    Description: Name of the DynamoDB table for load testing
+    AllowedPattern: ^[a-zA-Z0-9_.-]+$
+    MinLength: 3
+    MaxLength: 255
+
+  BillingMode:
+    Type: String
+    Default: PAY_PER_REQUEST
+    AllowedValues: [PROVISIONED, PAY_PER_REQUEST]
+    Description: Billing mode for the DynamoDB table
+
+  ReadCapacityUnits:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 40000
+    Description: Read capacity units for DynamoDB table (only used if BillingMode is PROVISIONED)
+
+  WriteCapacityUnits:
+    Type: Number
+    Default: 25
+    MinValue: 1
+    MaxValue: 40000
+    Description: Write capacity units for DynamoDB table (only used if BillingMode is PROVISIONED)
+
+  PointInTimeRecoveryEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable point-in-time recovery for the DynamoDB table
+
+  DeletionProtectionEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable deletion protection for the DynamoDB table
+
+  SSMParameterPrefix:
+    Type: String
+    Default: "/dynamodb-load-test"
+    Description: SSM parameter prefix for application configuration
+
+  # Application Configuration Parameters
+  ConcurrencyLimit:
+    Type: Number
+    Default: 100
+    MinValue: 1
+    MaxValue: 1000
+    Description: Maximum concurrency limit for load testing
+
+  TotalItems:
+    Type: Number
+    Default: 10000
+    MinValue: 100
+    MaxValue: 1000000
+    Description: Total number of items to write during load test
+
+  MaxConcurrencyPercentage:
+    Type: Number
+    Default: 80.0
+    MinValue: 10.0
+    MaxValue: 100.0
+    Description: Percentage of items to write at maximum concurrency
+
+  DuplicatePercentage:
+    Type: Number
+    Default: 0.0
+    MinValue: 0.0
+    MaxValue: 100.0
+    Description: Percentage of items that should be duplicates (0.0 = no duplicates)
+
+  CleanupAfterTest:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Whether to cleanup test items after load test completion
+
+  # Advanced DynamoDB Features (disabled for demo simplicity)
+  EnableEncryption:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Enable server-side encryption on the table
+
+Conditions:
+  IsProvisionedBilling: !Equals [!Ref BillingMode, "PROVISIONED"]
+  EnablePointInTimeRecovery: !Equals [!Ref PointInTimeRecoveryEnabled, "true"]
+  EnableDeletionProtection: !Equals [!Ref DeletionProtectionEnabled, "true"]
+  ShouldEnableEncryption: !Equals [!Ref EnableEncryption, "true"]
+
+Resources:
+  # DynamoDB Table for Load Testing
+  LoadTestTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${Environment}-${TableName}"
+      BillingMode: !Ref BillingMode
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      ProvisionedThroughput: !If
+        - IsProvisionedBilling
+        - ReadCapacityUnits: !Ref ReadCapacityUnits
+          WriteCapacityUnits: !Ref WriteCapacityUnits
+        - !Ref AWS::NoValue
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If
+          - EnablePointInTimeRecovery
+          - true
+          - false
+      DeletionProtectionEnabled: !If
+        - EnableDeletionProtection
+        - true
+        - false
+
+      SSESpecification: !If
+        - ShouldEnableEncryption
+        - SSEEnabled: true
+          SSEType: KMS
+          KMSMasterKeyId: alias/aws/dynamodb
+        - !Ref AWS::NoValue
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-${TableName}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: DynamoDBLoadTest
+        - Key: Purpose
+          Value: LoadTesting
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # IAM Role for Load Test Application Execution
+  LoadTestExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Environment}-dynamodb-load-test-execution-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+                - ec2.amazonaws.com
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: DynamoDBLoadTest
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # IAM Policy for DynamoDB Operations
+  DynamoDBAccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub "${Environment}-dynamodb-load-test-dynamodb-policy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:PutItem
+              - dynamodb:GetItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+              - dynamodb:Query
+              - dynamodb:Scan
+              - dynamodb:BatchGetItem
+              - dynamodb:BatchWriteItem
+              - dynamodb:DescribeTable
+              - dynamodb:DescribeTimeToLive
+            Resource:
+              - !GetAtt LoadTestTable.Arn
+          - Effect: Allow
+            Action:
+              - dynamodb:ListTables
+              - dynamodb:DescribeLimits
+            Resource: "*"
+      Roles:
+        - !Ref LoadTestExecutionRole
+
+  # IAM Policy for SSM Parameter Access
+  SSMParameterAccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub "${Environment}-dynamodb-load-test-ssm-policy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+              - ssm:GetParameters
+              - ssm:GetParametersByPath
+            Resource:
+              - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMParameterPrefix}"
+              - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMParameterPrefix}/*"
+          - Effect: Allow
+            Action:
+              - ssm:DescribeParameters
+            Resource: "*"
+      Roles:
+        - !Ref LoadTestExecutionRole
+
+  # IAM Policy for CloudWatch Metrics and Logs
+  CloudWatchAccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub "${Environment}-dynamodb-load-test-cloudwatch-policy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - cloudwatch:PutMetricData
+              - cloudwatch:GetMetricStatistics
+              - cloudwatch:ListMetrics
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:DescribeLogStreams
+              - logs:DescribeLogGroups
+            Resource:
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/dynamodb-load-test/*"
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/dynamodb-load-test/*"
+      Roles:
+        - !Ref LoadTestExecutionRole
+
+Outputs:
+  # DynamoDB Table Outputs
+  LoadTestTableName:
+    Description: Name of the DynamoDB table created for load testing
+    Value: !Ref LoadTestTable
+
+  LoadTestTableArn:
+    Description: ARN of the DynamoDB table created for load testing
+    Value: !GetAtt LoadTestTable.Arn
+
+  # IAM Role Outputs
+  LoadTestExecutionRoleArn:
+    Description: ARN of the IAM role for load test execution
+    Value: !GetAtt LoadTestExecutionRole.Arn
+
+  LoadTestExecutionRoleName:
+    Description: Name of the IAM role for load test execution
+    Value: !Ref LoadTestExecutionRole
+
+  # Table Configuration Outputs
+  TableBillingMode:
+    Description: Billing mode of the DynamoDB table
+    Value: !Ref BillingMode
+
+  TableReadCapacity:
+    Description: Read capacity units of the DynamoDB table
+    Value: !If
+      - IsProvisionedBilling
+      - !Ref ReadCapacityUnits
+      - "On-Demand"
+
+  TableWriteCapacity:
+    Description: Write capacity units of the DynamoDB table
+    Value: !If
+      - IsProvisionedBilling
+      - !Ref WriteCapacityUnits
+      - "On-Demand"
+
+  # SSM Parameter Outputs
+  SSMParameterPrefix:
+    Description: SSM parameter prefix for load test configuration
+    Value: !Ref SSMParameterPrefix
+
+  # Environment Output
+  Environment:
+    Description: Environment name
+    Value: !Ref Environment

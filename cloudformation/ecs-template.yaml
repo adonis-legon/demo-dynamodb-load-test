@@ -1,0 +1,200 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "DynamoDB Load Test - ECS Template for AWS ECS Deployment"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod, aws]
+    Description: Environment name for resource naming and configuration
+
+  VpcId:
+    Type: String
+    Description: ID of the VPC
+
+  PrivateSubnetId:
+    Type: String
+    Description: ID of the private subnet
+
+  SecurityGroupId:
+    Type: String
+    Description: ID of the security group for ECS tasks
+
+  ECRRepositoryURI:
+    Type: String
+    Description: URI of the ECR repository
+
+  TaskExecutionRoleArn:
+    Type: String
+    Description: ARN of the task execution role
+
+  TaskRoleArn:
+    Type: String
+    Description: ARN of the task role
+
+  LogGroupName:
+    Type: String
+    Description: Name of the CloudWatch log group
+
+  TaskCpu:
+    Type: Number
+    Default: 256
+    AllowedValues: [256, 512, 1024, 2048, 4096]
+    Description: CPU units for the ECS task (1 vCPU = 1024 CPU units)
+
+  TaskMemory:
+    Type: Number
+    Default: 512
+    AllowedValues: [512, 1024, 2048, 3072, 4096, 5120, 6144, 7168, 8192]
+    Description: Memory in MiB for the ECS task
+
+  ContainerImage:
+    Type: String
+    Description: ECR image URI for the load test application
+    Default: ""
+
+  ContainerPort:
+    Type: Number
+    Default: 8080
+    Description: Container port for the application
+
+  DesiredCount:
+    Type: Number
+    Default: 0
+    Description: Desired number of running tasks
+
+  MaxCapacity:
+    Type: Number
+    Default: 10
+    Description: Maximum number of tasks for auto scaling
+
+  MinCapacity:
+    Type: Number
+    Default: 0
+    Description: Minimum number of tasks for auto scaling
+
+  TableName:
+    Type: String
+    Default: "dynamodb-load-test"
+    Description: Name of the DynamoDB table for load testing
+
+  SSMParameterPrefix:
+    Type: String
+    Default: "/dynamodb-load-test"
+    Description: SSM parameter prefix for application configuration
+
+Conditions:
+  HasContainerImage: !Not [!Equals [!Ref ContainerImage, ""]]
+
+Resources:
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${Environment}-dynamodb-load-test-cluster"
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 4
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-dynamodb-load-test-cluster"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: DynamoDBLoadTest
+
+  # ECS Task Definition
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${Environment}-dynamodb-load-test"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      ExecutionRoleArn: !Ref TaskExecutionRoleArn
+      TaskRoleArn: !Ref TaskRoleArn
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: dynamodb-load-test
+          Image: !If
+            - HasContainerImage
+            - !Ref ContainerImage
+            - !Sub "${ECRRepositoryURI}:latest"
+          Essential: true
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              Protocol: tcp
+          Environment:
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: ENVIRONMENT
+              Value: !Ref Environment
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: !Ref Environment
+            - Name: TABLE_NAME
+              Value: !Ref TableName
+            - Name: SSM_PARAMETER_PREFIX
+              Value: !Ref SSMParameterPrefix
+            - Name: CLOUDWATCH_NAMESPACE
+              Value: "DynamoDBLoadTest"
+            - Name: LOG_LEVEL
+              Value: "INFO"
+            - Name: USE_LOCALSTACK
+              Value: "false"
+            - Name: AWS_ENDPOINT_URL_SSM
+              Value: ""
+            - Name: AWS_ENDPOINT_URL_DYNAMODB
+              Value: ""
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroupName
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: "ecs"
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - "curl -f http://localhost:8080/health || exit 1"
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+          StopTimeout: 30
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-dynamodb-load-test-task"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: DynamoDBLoadTest
+
+Outputs:
+  # ECS Cluster Outputs
+  ECSClusterName:
+    Description: Name of the ECS cluster
+    Value: !Ref ECSCluster
+
+  ECSClusterArn:
+    Description: ARN of the ECS cluster
+    Value: !GetAtt ECSCluster.Arn
+
+  # Task Definition Outputs
+  TaskDefinitionArn:
+    Description: ARN of the ECS task definition
+    Value: !Ref ECSTaskDefinition
+
+  ECSTaskDefinitionFamily:
+    Description: Family name of the ECS task definition
+    Value: !Sub "${Environment}-dynamodb-load-test"

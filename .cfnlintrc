@@ -1,0 +1,18 @@
+ignore_checks:
+  - W3002  # Ignore warnings about hardcoded partition in ARNs
+  - I3042  # Ignore informational about !Ref GetAtt
+  - W2001  # Parameter not used warnings (some parameters may be used conditionally)
+  - W3005  # DependsOn not needed for some resources
+  - W2030  # DBSubnetGroupName not needed for some configurations
+  - W6001  # Output values that are imports from other outputs (acceptable for cross-stack references)
+templates:
+  - cloudformation/*.yaml
+  - cloudformation/*.yml
+regions:
+  - us-east-1
+  - us-west-2
+  - eu-west-1
+  - ap-southeast-2
+configure_rules:
+  E3012:
+    strict: false

@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: dynamodb-load-test
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+# No web server needed for batch processing
+
+logging:
+  level:
+    "[com.example.dynamodb.loadtest]": INFO
+    "[software.amazon.awssdk]": WARN
+    "[ca.pjer.logback]": WARN
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+
+aws:
+  region: ${AWS_REGION:us-east-1}
+  endpoint-url: ${AWS_ENDPOINT_URL:http://localhost:4566}
+
+dynamodb:
+  endpoint: ${aws.endpoint-url}
+
+ssm:
+  endpoint: ${aws.endpoint-url}
+  parameter-prefix: ${SSM_PARAMETER_PREFIX:/local/dynamodb-load-test}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: aws
+
+aws:
+  region: ${AWS_REGION:us-east-1}
+
+ssm:
+  parameter-prefix: ${SSM_PARAMETER_PREFIX:/${ENVIRONMENT:dev}/dynamodb-load-test}
+
+# Application mode configuration
+app:
+  mode: ${APP_MODE:web}

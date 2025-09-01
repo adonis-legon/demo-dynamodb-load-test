@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    
+    <!-- Console appender with JSON formatting for structured logging -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp/>
+                <logLevel/>
+                <loggerName/>
+                <message/>
+                <mdc/>
+                <arguments/>
+                <stackTrace/>
+            </providers>
+        </encoder>
+    </appender>
+    
+    <!-- Root logger configuration - all logs go to console (stdout) -->
+    <!-- In ECS, stdout/stderr are automatically captured and sent to CloudWatch Logs -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+    
+    <!-- Application-specific logging levels -->
+    <logger name="com.example.dynamodb.loadtest" level="INFO"/>
+    <logger name="software.amazon.awssdk" level="WARN"/>
+    
+</configuration>

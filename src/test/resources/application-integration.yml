@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: dynamodb-load-test-integration
+  profiles:
+    active: integration
+
+logging:
+  level:
+    com.example.dynamodb.loadtest: DEBUG
+    software.amazon.awssdk: INFO
+    org.testcontainers: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Integration test specific configuration
+aws:
+  region: us-east-1
+  # endpoint-url will be set dynamically by @DynamicPropertySource
+
+dynamodb:
+  # endpoint will be set dynamically by @DynamicPropertySource
+  table-name: integration-test-table
+
+ssm:
+  # endpoint will be set dynamically by @DynamicPropertySource
+  parameter-prefix: /integration-test/dynamodb-load-test
+
+cloudwatch:
+  # endpoint will be set dynamically by @DynamicPropertySource
+  enabled: true
+  namespace: DynamoDBLoadTestIntegration
+
+# Test-specific load test configuration
+load-test:
+  concurrency-limit: 5
+  total-items: 50
+  max-concurrency-percentage: 80.0
+  inject-duplicates: true
+  test-duration-seconds: 30

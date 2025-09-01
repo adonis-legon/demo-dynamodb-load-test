@@ -1,0 +1,243 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "DynamoDB Load Test Monitoring Infrastructure - CloudWatch Dashboard"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [local, dev, staging, prod, aws]
+    Description: Environment name for resource naming and configuration
+
+  TableName:
+    Type: String
+    Description: Name of the DynamoDB table being monitored
+
+  ECSClusterName:
+    Type: String
+    Description: Name of the ECS cluster
+
+  LogGroupName:
+    Type: String
+    Description: Name of the CloudWatch log group
+
+Resources:
+  # CloudWatch Dashboard
+  LoadTestDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${Environment}-DynamoDB-Load-Test-Dashboard"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "DynamoDBLoadTest", "ResponseTime", "Environment", "${Environment}", { "stat": "Average" } ],
+                  [ "...", { "stat": "p95" } ],
+                  [ "...", { "stat": "p99" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Response Time Metrics",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "label": "Milliseconds"
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "DynamoDBLoadTest", "ErrorRate", "Environment", "${Environment}" ],
+                  [ ".", "CapacityErrors", ".", "." ],
+                  [ ".", "DuplicateKeyErrors", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Error Rate Metrics",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "label": "Percent / Count"
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "DynamoDBLoadTest", "ThroughputRPS", "Environment", "${Environment}" ],
+                  [ ".", "ConcurrencyLevel", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Throughput and Concurrency",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "label": "Requests/Second"
+                  },
+                  "right": {
+                    "min": 0,
+                    "label": "Concurrent Operations"
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "${TableName}", { "stat": "Sum" } ],
+                  [ ".", "ConsumedWriteCapacityUnits", ".", ".", { "stat": "Sum" } ],
+                  [ ".", "ProvisionedReadCapacityUnits", ".", ".", { "stat": "Average" } ],
+                  [ ".", "ProvisionedWriteCapacityUnits", ".", ".", { "stat": "Average" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Capacity Utilization",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "label": "Capacity Units"
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 12,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/DynamoDB", "ThrottledRequests", "TableName", "${TableName}", "Operation", "PutItem" ],
+                  [ ".", "SystemErrors", ".", ".", ".", "." ],
+                  [ ".", "UserErrors", ".", ".", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Errors and Throttling",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "label": "Count"
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 12,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/DynamoDB", "SuccessfulRequestLatency", "TableName", "${TableName}", "Operation", "PutItem", { "stat": "Average" } ],
+                  [ "...", { "stat": "p95" } ],
+                  [ "...", { "stat": "p99" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Request Latency",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "label": "Milliseconds"
+                  }
+                }
+              }
+            }
+          ]
+        }
+
+  # Custom Metric Filters for Application Logs
+  LoadTestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/dynamodb-load-test/${Environment}"
+      RetentionInDays: 14
+
+  ErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref LoadTestLogGroup
+      FilterPattern: '[timestamp, level="ERROR", ...]'
+      MetricTransformations:
+        - MetricNamespace: DynamoDBLoadTest
+          MetricName: ApplicationErrors
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  CapacityErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref LoadTestLogGroup
+      FilterPattern: '[timestamp, level, message="*ProvisionedThroughputExceededException*"]'
+      MetricTransformations:
+        - MetricNamespace: DynamoDBLoadTest
+          MetricName: CapacityErrors
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  DuplicateKeyErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref LoadTestLogGroup
+      FilterPattern: '[timestamp, level, message="*ConditionalCheckFailedException*"]'
+      MetricTransformations:
+        - MetricNamespace: DynamoDBLoadTest
+          MetricName: DuplicateKeyErrors
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+Outputs:
+  DashboardURL:
+    Description: URL of the CloudWatch Dashboard
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${Environment}-DynamoDB-Load-Test-Dashboard"
+
+  LoadTestLogGroupName:
+    Description: Name of the CloudWatch Log Group for load test application
+    Value: !Ref LoadTestLogGroup
+
+  LoadTestLogGroupArn:
+    Description: ARN of the CloudWatch Log Group for load test application
+    Value: !GetAtt LoadTestLogGroup.Arn

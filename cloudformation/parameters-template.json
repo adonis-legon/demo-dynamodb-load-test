@@ -1,0 +1,114 @@
+[
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "aws"
+  },
+  {
+    "ParameterKey": "TableName",
+    "ParameterValue": "dynamodb-load-test"
+  },
+  {
+    "ParameterKey": "ConcurrencyLimit",
+    "ParameterValue": "10"
+  },
+  {
+    "ParameterKey": "TotalItems",
+    "ParameterValue": "100"
+  },
+  {
+    "ParameterKey": "MaxConcurrencyPercentage",
+    "ParameterValue": "80.0"
+  },
+  {
+    "ParameterKey": "DuplicatePercentage",
+    "ParameterValue": "5.0"
+  },
+  {
+    "ParameterKey": "CleanupAfterTest",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "ReadCapacityUnits",
+    "ParameterValue": "5"
+  },
+  {
+    "ParameterKey": "WriteCapacityUnits",
+    "ParameterValue": "25"
+  },
+  {
+    "ParameterKey": "BillingMode",
+    "ParameterValue": "PAY_PER_REQUEST"
+  },
+  {
+    "ParameterKey": "PointInTimeRecoveryEnabled",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "DeletionProtectionEnabled",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "SSMParameterPrefix",
+    "ParameterValue": "/dynamodb-load-test"
+  },
+  {
+    "ParameterKey": "TemplateS3Bucket",
+    "ParameterValue": "dynamodb-load-test-templates-481123212323"
+  },
+  {
+    "ParameterKey": "TemplateS3KeyPrefix",
+    "ParameterValue": "dynamodb-load-test/"
+  },
+  {
+    "ParameterKey": "VpcCidr",
+    "ParameterValue": "10.0.0.0/16"
+  },
+  {
+    "ParameterKey": "PublicSubnetCidr",
+    "ParameterValue": "10.0.1.0/24"
+  },
+  {
+    "ParameterKey": "PrivateSubnetCidr",
+    "ParameterValue": "10.0.2.0/24"
+  },
+  {
+    "ParameterKey": "AvailabilityZone",
+    "ParameterValue": "us-east-1a"
+  },
+  {
+    "ParameterKey": "ECRRepositoryName",
+    "ParameterValue": "dynamodb-load-test"
+  },
+  {
+    "ParameterKey": "LogRetentionDays",
+    "ParameterValue": "7"
+  },
+  {
+    "ParameterKey": "TaskCpu",
+    "ParameterValue": "4096"
+  },
+  {
+    "ParameterKey": "TaskMemory",
+    "ParameterValue": "8192"
+  },
+  {
+    "ParameterKey": "ContainerImage",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "ContainerPort",
+    "ParameterValue": "8080"
+  },
+  {
+    "ParameterKey": "DesiredCount",
+    "ParameterValue": "0"
+  },
+  {
+    "ParameterKey": "MaxCapacity",
+    "ParameterValue": "10"
+  },
+  {
+    "ParameterKey": "MinCapacity",
+    "ParameterValue": "0"
+  }
+]

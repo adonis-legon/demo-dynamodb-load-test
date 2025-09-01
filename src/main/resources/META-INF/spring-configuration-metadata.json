@@ -1,0 +1,81 @@
+{
+  "groups": [
+    {
+      "name": "aws",
+      "type": "com.example.dynamodb.loadtest.config.AWSConfigurationProperties",
+      "sourceType": "com.example.dynamodb.loadtest.config.AWSConfigurationProperties"
+    },
+    {
+      "name": "dynamodb",
+      "type": "com.example.dynamodb.loadtest.config.DynamoDBConfigurationProperties",
+      "sourceType": "com.example.dynamodb.loadtest.config.DynamoDBConfigurationProperties"
+    },
+    {
+      "name": "ssm",
+      "type": "com.example.dynamodb.loadtest.config.SSMConfigurationProperties",
+      "sourceType": "com.example.dynamodb.loadtest.config.SSMConfigurationProperties"
+    },
+    {
+      "name": "cloudwatch",
+      "type": "com.example.dynamodb.loadtest.config.CloudWatchConfigurationProperties",
+      "sourceType": "com.example.dynamodb.loadtest.config.CloudWatchConfigurationProperties"
+    },
+    {
+      "name": "app",
+      "type": "com.example.dynamodb.loadtest.config.AppConfigurationProperties",
+      "sourceType": "com.example.dynamodb.loadtest.config.AppConfigurationProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "aws.region",
+      "type": "java.lang.String",
+      "description": "AWS region for services",
+      "defaultValue": "us-east-1"
+    },
+    {
+      "name": "aws.endpoint-url",
+      "type": "java.lang.String",
+      "description": "AWS endpoint URL (for LocalStack or custom endpoints)"
+    },
+    {
+      "name": "dynamodb.endpoint",
+      "type": "java.lang.String",
+      "description": "DynamoDB endpoint URL"
+    },
+    {
+      "name": "ssm.endpoint",
+      "type": "java.lang.String",
+      "description": "SSM endpoint URL"
+    },
+    {
+      "name": "ssm.parameter-prefix",
+      "type": "java.lang.String",
+      "description": "Prefix for SSM parameters",
+      "defaultValue": "/dynamodb-load-test"
+    },
+    {
+      "name": "cloudwatch.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable CloudWatch metrics publishing",
+      "defaultValue": true
+    },
+    {
+      "name": "cloudwatch.namespace",
+      "type": "java.lang.String",
+      "description": "CloudWatch metrics namespace",
+      "defaultValue": "DynamoDBLoadTest"
+    },
+    {
+      "name": "cloudwatch.endpoint",
+      "type": "java.lang.String",
+      "description": "CloudWatch endpoint URL"
+    },
+    {
+      "name": "app.mode",
+      "type": "java.lang.String",
+      "description": "Application mode",
+      "defaultValue": "batch"
+    }
+  ]
+}

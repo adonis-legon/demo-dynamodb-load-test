@@ -1,0 +1,12 @@
+services:
+  dynamodb-load-test:
+    build: .
+    container_name: dynamodb-load-test-app
+    network_mode: host
+    env_file:
+      - .env.local
+    # Environment variables are loaded from env_file (.env.local)
+    # No need to duplicate them here since env_file handles it
+    profiles:
+      - app
+    command: java -jar /app/app.jar
