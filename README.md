@@ -361,7 +361,7 @@ vim .env.aws
 
 ```bash
 # View CloudWatch dashboard (created automatically)
-aws cloudwatch get-dashboard --dashboard-name "DynamoDBLoadTest-aws" --profile your-profile-name
+aws cloudwatch get-dashboard --dashboard-name "aws-DynamoDB-Load-Test-Dashboard" --profile your-profile-name
 
 # Check DynamoDB table metrics
 aws dynamodb describe-table --table-name aws-dynamodb-load-test --profile your-profile-name
